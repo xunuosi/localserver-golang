@@ -3,10 +3,14 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
 	"net"
 	"os"
 	"time"
 )
+
+var records map[string]string
 
 func main() {
 	// addrs, err := net.LookupHost("www.finalfantasyxiv.com")
@@ -42,6 +46,8 @@ func TestLocalServer(connectType string) {
 		CreateLocalTCPServer()
 	case "udp":
 		CreateLocalUDPServer()
+	case "dns":
+		CreateLocalDNSServer()
 	}
 }
 
@@ -119,4 +125,76 @@ func CreateLocalTCPServer() {
 		fmt.Printf("local TCP server send client success and close connection")
 	}
 
+}
+
+func CreateLocalDNSServer() {
+	records = map[string]string{
+		"google.com": "216.58.196.142",
+		"amazon.com": "176.32.103.205",
+	}
+
+	// Bind to a specific address and port
+	addr, err := net.ResolveUDPAddr("udp", ":8090")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	// Listen on the address
+	conn, err := net.ListenUDP("udp", addr)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer conn.Close()
+	fmt.Println("Create local DNS server success and executing......")
+
+	// Run indefinitely
+	for {
+		// Read incoming data
+		data := make([]byte, 1024)
+		_, addr, err := conn.ReadFromUDP(data)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		// Print the incoming data
+		fmt.Printf("Received DNS request from addr:[%s]", addr.String())
+		packet := gopacket.NewPacket(data, layers.LayerTypeDNS, gopacket.Default)
+		dnsPacket := packet.Layer(layers.LayerTypeDNS)
+		dns, _ := dnsPacket.(*layers.DNS)
+		serveDNS(conn, addr, dns)
+	}
+}
+
+func serveDNS(u *net.UDPConn, clientAddr net.Addr, request *layers.DNS) {
+	replyMess := request
+	var dnsAnswer layers.DNSResourceRecord
+	dnsAnswer.Type = layers.DNSTypeA
+	var ip string
+	var err error
+	var ok bool
+	ip, ok = records[string(request.Questions[0].Name)]
+	if !ok {
+		//Todo: Log no data present for the IP and handle:todo
+	}
+	a, _, _ := net.ParseCIDR(ip + "/24")
+	dnsAnswer.Type = layers.DNSTypeA
+	dnsAnswer.IP = a
+	dnsAnswer.Name = []byte(request.Questions[0].Name)
+	fmt.Println(request.Questions[0].Name)
+	dnsAnswer.Class = layers.DNSClassIN
+	replyMess.QR = true
+	replyMess.ANCount = 1
+	replyMess.OpCode = layers.DNSOpCodeNotify
+	replyMess.AA = true
+	replyMess.Answers = append(replyMess.Answers, dnsAnswer)
+	replyMess.ResponseCode = layers.DNSResponseCodeNoErr
+	buf := gopacket.NewSerializeBuffer()
+	opts := gopacket.SerializeOptions{} // See SerializeOptions for more details.
+	err = replyMess.SerializeTo(buf, opts)
+	if err != nil {
+		panic(err)
+	}
+	u.WriteTo(buf.Bytes(), clientAddr)
 }
