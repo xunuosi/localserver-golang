@@ -3,11 +3,14 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
+	"log"
 	"net"
 	"os"
 	"time"
+
+	"cn.xns.dialtest/proxy/socks5"
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
 )
 
 var records map[string]string
@@ -48,6 +51,8 @@ func TestLocalServer(connectType string) {
 		CreateLocalUDPServer()
 	case "dns":
 		CreateLocalDNSServer()
+	case "socks5_proxy":
+		CreateSocks5ProxyServer()
 	}
 }
 
@@ -197,4 +202,26 @@ func serveDNS(u *net.UDPConn, clientAddr net.Addr, request *layers.DNS) {
 		panic(err)
 	}
 	u.WriteTo(buf.Bytes(), clientAddr)
+}
+
+func CreateSocks5ProxyServer() {
+	fmt.Println("Create socks5 proxy server start......")
+	creds := socks5.StaticCredentials{
+		"user": "xunuosi",
+	}
+	cator := socks5.UserPassAuthenticator{Credentials: creds}
+	conf := &socks5.Config{
+		AuthMethods: []socks5.Authenticator{cator},
+		Logger:      log.New(os.Stdout, "", log.LstdFlags),
+	}
+	serv, err := socks5.New(conf)
+	if err != nil {
+		fmt.Println("Create socks5 proxy server failed E:[", err.Error(), "]")
+		return
+	}
+	if err = serv.ListenAndServe("tcp", "127.0.0.1:12120"); err != nil {
+		fmt.Println("Create socks5 proxy server failed2 E:[", err.Error(), "]")
+		return
+	}
+	fmt.Println("Create socks5 proxy server success and listening......")
 }
