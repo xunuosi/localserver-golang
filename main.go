@@ -58,7 +58,8 @@ func TestLocalServer(connectType string) {
 
 func CreateLocalUDPServer() {
 	// Bind to a specific address and port
-	addr, err := net.ResolveUDPAddr("udp", ":80")
+	laddr := "127.0.0.1:12200"
+	addr, err := net.ResolveUDPAddr("udp", laddr)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -71,7 +72,7 @@ func CreateLocalUDPServer() {
 		return
 	}
 	defer conn.Close()
-	fmt.Println("Create local UDP server success and executing......")
+	fmt.Println("Create local[", laddr, "] UDP server success and executing......")
 
 	// Run indefinitely
 	for {
